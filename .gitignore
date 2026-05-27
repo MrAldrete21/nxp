@@ -1,0 +1,47 @@
+# Build artifacts generados por MCUXpresso IDE / GCC ARM
+Debug/
+Release/
+debug/
+release/
+*.o
+*.d
+*.a
+*.elf
+*.axf
+*.bin
+*.hex
+*.map
+*.lst
+
+# Settings y metadata del workspace de Eclipse / MCUXpresso IDE
+.metadata/
+.settings/
+.cproject
+.project
+.launches/
+*.launch
+.mxproject
+.config/
+
+# IDE auxiliares
+.vscode/
+.idea/
+*.swp
+
+# Backups de editores
+*~
+*.bak
+*.orig
+
+# Logs / outputs varios
+*.log
+
+# Sistema operativo
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Carpeta del proyecto MCUXpresso real (generada por SDK Import Wizard)
+# Se mantiene fuera del repo porque cada PC genera su propio metadata
+# de Eclipse al importar. El README explica los pasos.
+rx/
