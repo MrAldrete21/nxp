@@ -26,10 +26,10 @@
  * activamente, por lo que el lazo nunca pierde mas de unos pocos us de
  * latencia entre eventos.
  *
- * Mapeo de botones:
- *   SW2 click corto -> +5 grados a la articulacion seleccionada
- *   SW3 click corto -> -5 grados a la articulacion seleccionada
- *   SW3 long-press  -> ciclar a la siguiente articulacion (Hombro->Codo->Muneca->...)
+ * Mapeo de botones (revision actual):
+ *   SW2 click corto -> CICLAR articulacion (Hombro->Codo->Muneca->...)
+ *   SW3 click corto -> CONTRAER  = +5 grados (mas flexion) en la seleccionada
+ *   SW3 long-press  -> RETRAER   = -5 grados (mas extension) en la seleccionada
  */
 
 #include <stdint.h>
@@ -80,28 +80,31 @@ static void app_handle_button_event(button_event_t eEvt)
     switch (eEvt)
     {
         case BUTTON_EVENT_SW2_SHORT:
-            /* "+5 grados" en la articulacion seleccionada. */
-            joints_adjust(+5);
-            uart_dbg_send_str("[BTN] SW2 short -> +5 deg\r\n");
-            break;
-        case BUTTON_EVENT_SW3_SHORT:
-            /* "-5 grados" en la articulacion seleccionada. */
-            joints_adjust(-5);
-            uart_dbg_send_str("[BTN] SW3 short -> -5 deg\r\n");
-            break;
-        case BUTTON_EVENT_SW3_LONG:
-            /* long-press: ciclar a la siguiente articulacion. */
+            /* SW2 click corto: ciclar a la siguiente articulacion
+             * (Hombro -> Codo -> Muneca -> Hombro -> ...). */
             joints_cycle_selection();
             {
                 char acBuf[48];
                 int iLen = snprintf(acBuf, sizeof(acBuf),
-                                    "[BTN] SW3 LONG -> sel=%s\r\n",
+                                    "[BTN] SW2 -> sel=%s\r\n",
                                     joint_name(joints_get_selected()));
                 if (iLen > 0)
                 {
                     uart_dbg_send_str(acBuf);
                 }
             }
+            break;
+        case BUTTON_EVENT_SW3_SHORT:
+            /* SW3 click corto: CONTRAER = +5 grados (mas flexion). */
+            joints_adjust(+5);
+            uart_dbg_send_str("[BTN] SW3 short -> contraer (+5 deg)\r\n");
+            break;
+        case BUTTON_EVENT_SW3_LONG:
+            /* SW3 long-press: RETRAER = -5 grados (mas extension).
+             * Nota: se dispara una vez por presion al cruzar los 600 ms;
+             * para seguir retrayendo hay que soltar y volver a mantener. */
+            joints_adjust(-5);
+            uart_dbg_send_str("[BTN] SW3 LONG -> retraer (-5 deg)\r\n");
             break;
         default:
             break;

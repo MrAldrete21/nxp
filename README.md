@@ -22,11 +22,11 @@ Nodo **transmisor** de la red CAN del **Proyecto 2 NXP-UAG**
 
 ## Botones
 
-| Acción              | Efecto                                                         |
-| :------------------ | :------------------------------------------------------------- |
-| SW2 click corto     | +5° en la articulación actualmente seleccionada                |
-| SW3 click corto     | −5° en la articulación actualmente seleccionada                |
-| SW3 long-press (≥600 ms) | Ciclar selección: Hombro → Codo → Muñeca → Hombro → …      |
+| Acción                   | Efecto                                                         |
+| :----------------------- | :------------------------------------------------------------- |
+| SW2 click                | Ciclar selección: Hombro → Codo → Muñeca → Hombro → …          |
+| SW3 click corto          | **Contraer** (+5°, más flexión) en la articulación seleccionada |
+| SW3 long-press (≥600 ms) | **Retraer**  (−5°, más extensión) en la articulación seleccionada |
 
 ---
 
