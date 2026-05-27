@@ -1,15 +1,32 @@
-# rx_mcxa156 — Receptor CAN (FRDM-MCXA156)
+# nxp — Transmisor CAN (FRDM-MCXA156)
 
-Nodo receptor de la red CAN del **Proyecto 2 NXP-UAG**
+Nodo **transmisor** de la red CAN del **Proyecto 2 NXP-UAG**
 "Red CAN para Coordinación de Prótesis Robótica Modular".
 
-- **Bus:** CAN clásico, 500 kbps, frame estándar (11-bit ID).
-- **ID que escucha:** `0x200`, DLC 8 bytes.
-- **Layout del payload:** `byte0`=Hombro (u8 0..180), `byte1<<8 | byte2`=Codo (u16 0..150), `byte3`=Muñeca (u8 0..90), `bytes 4..7`=reservados.
-- **Salida:** log verbose por LPUART0 a 115200 8N1 (MCU-Link USB-VCP).
-- **Estado actual del firmware:** Paso A — bring-up de CAN completo, sin PWM/CSV/watchdog todavía.
+> **Cambio de rol:** En esta iteración la MCXA156 es **TRANSMISOR** (lee SW2/SW3, manda el frame CAN). La MCXN947 es **RECEPTOR** (decodifica y emite CSV al viewer 3D PyVista).
 
-> El transmisor (FRDM-MCXN947, frame `0x200` cada 50 ms) está en otro repo / carpeta. Sin el TX corriendo, el RX seguirá imprimiendo `rx[ok=0 err=...]` y los errores subirán porque ningún nodo está dando ACK al bus.
+## Topología del sistema
+
+```
+   [FRDM-MCXA156]                CAN 500 kbps            [FRDM-MCXN947]                 USB-VCP            [Viewer PyVista]
+   botones SW2/SW3 ─── J22 ◀────────────────────────▶ J10 ───── recibe ─────────────────────────────────▶  brazo 3D
+   transmite                                                    decodifica
+   frame 0x200                                                  emite CSV "S,E,W\r\n"
+   cada 50 ms                                                   cada 50 ms
+```
+
+- **Bus:** CAN clásico, 500 kbps, frame estándar (11-bit ID).
+- **ID que transmite:** `0x200`, DLC 8 bytes.
+- **Layout del payload:** `byte0`=Hombro (u8 0..180), `byte1<<8 | byte2`=Codo (u16 0..150), `byte3`=Muñeca (u8 0..90), `bytes 4..7`=reservados.
+- **Salida visible:** log verbose por LPUART0 a 115200 8N1 (MCU-Link USB-VCP).
+
+## Botones
+
+| Acción              | Efecto                                                         |
+| :------------------ | :------------------------------------------------------------- |
+| SW2 click corto     | +5° en la articulación actualmente seleccionada                |
+| SW3 click corto     | −5° en la articulación actualmente seleccionada                |
+| SW3 long-press (≥600 ms) | Ciclar selección: Hombro → Codo → Muñeca → Hombro → …      |
 
 ---
 
@@ -25,7 +42,7 @@ Las dos tarjetas FRDM tienen transceiver **TJA1057 onboard** (no necesita transc
 
 **Atención:** los pinouts de J22 (A156) y J10 (N947) son distintos — no es 1:1.
 
-Una resistencia de terminación de **120 Ω entre CANH y CANL** en cada extremo del bus mejora la integridad de señal, pero para distancias cortas (cable < 30 cm) los TJA1057 suelen tolerar el bus sin terminación.
+Una resistencia de **120 Ω entre CANH y CANL** en cada extremo del bus mejora la integridad de señal, pero para distancias cortas (< 30 cm) los TJA1057 suelen tolerar el bus sin terminación.
 
 ---
 
@@ -40,95 +57,83 @@ Una resistencia de terminación de **120 Ω entre CANH y CANL** en cada extremo 
 | LED Rojo    | P3_12       | ALT0  | RGB onboard (active-low)        |
 | LED Verde   | P3_13       | ALT0  | RGB onboard (active-low)        |
 | LED Azul    | P3_0        | ALT0  | RGB onboard (active-low)        |
+| SW2         | P1_7        | ALT0  | botón onboard "+"               |
+| SW3         | P0_6        | ALT0  | botón onboard "−" / long-ciclar |
 
 ### Significado de los LEDs
 
 | Estado del LED       | Significado                                            |
 | :------------------- | :----------------------------------------------------- |
-| Azul parpadea 1 Hz   | Firmware vivo (toggle cada 500 ms en lazo de app).     |
-| Verde encendido      | Hay frame CAN reciente (< 200 ms desde el último OK).  |
-| Verde apagado        | No hay tráfico CAN o se perdió el bus.                 |
-| Rojo                 | _Reservado para Paso siguiente (watchdog, fuera-rango)._|
+| Azul parpadea 1 Hz   | Firmware vivo (heartbeat cada 500 ms).                 |
 
 ---
 
 ## Cómo importar y compilar (otra PC)
 
-Esto asume que tienes **MCUXpresso IDE 25.6.x** + el SDK **frdm-mcxa156 v26.3.0** instalados localmente.
+Asume **MCUXpresso IDE 25.6.x** + SDK **frdm-mcxa156 v26.3.0** instalados.
 
 ### 1. Clonar este repo
 
 ```powershell
-git clone <URL_DEL_REPO> rx_mcxa156
-cd rx_mcxa156
+git clone https://github.com/MrAldrete21/nxp.git brazo
+cd brazo
 ```
 
-### 2. Instalar el SDK (una vez por máquina)
+### Si ya tenías el repo clonado de antes (cambio de rol RX → TX)
 
-- En el sitio MCUXpresso SDK Builder de NXP, descarga el paquete **SDK_2.x_FRDM-MCXA156 v26.3.0** (formato P2 site, archivo `.zip`).
-- En MCUXpresso IDE → pestaña **"Installed SDKs"** → arrastra y suelta el `.zip` sobre la ventana. El IDE lo registra automáticamente.
+```powershell
+cd brazo
+git pull
+```
 
-### 3. Importar el proyecto base `led_blinky`
+Verás archivos nuevos (`buttons.c/h`, `joints.c/h`, `can_tx.c/h`) y archivos eliminados (`can_rx.c/h`). En MCUXpresso IDE: clic derecho en `source/` → **Delete** los `can_rx.c/h` antiguos del proyecto IDE, copia los nuevos `*.c/*.h` del repo al `source/` del proyecto IDE, presiona **F5** (Refresh), y rebuild.
 
-1. En MCUXpresso IDE → *File* → *Import…* → *MCUXpresso SDK* → *SDK Import Wizard*.
-2. SDK: **frdm-mcxa156** v26.3.0.
-3. Marca el ejemplo `led_blinky` (driver_examples → led_blinky) o `led_blinky_peripheral` — cualquiera de las dos sirve, el `main.c` que sobreescribimos detecta `peripherals.h` con `__has_include` y se adapta.
-4. *Project name*: `rx_mcxa156`.
-5. *Location*: la **carpeta vacía** dentro del repo donde se guardará el proyecto IDE (por ejemplo `rx_mcxa156/rx/`). **NO uses la raíz `rx_mcxa156/` directamente** o el IDE tratará de sobreescribir `source/` y `README.md`.
-6. *Finish*. El IDE genera la carpeta del proyecto con `source/led_blinky.c` y compila.
+### 2. Instalar SDK FRDM-MCXA156 v26.3.0
 
-### 4. Reemplazar `source/` con los módulos del repo
+En MCUXpresso IDE → pestaña **"Installed SDKs"** → arrastrar el `.zip` del SDK O usar **"Install MCUXpresso SDKs"** del Welcome para descargarlo del catálogo NXP.
 
-1. En el explorador de proyecto, borra el archivo `source/led_blinky.c` que generó el SDK Wizard.
-2. Copia (o crea como link) todos los archivos de `<repo>/source/` dentro de la carpeta `source/` del proyecto importado:
-   - `main.c`
-   - `app.c`, `app.h`
-   - `tick.c`, `tick.h`
-   - `uart_dbg.c`, `uart_dbg.h`
-   - `gpio_io.c`, `gpio_io.h`
-   - `can_rx.c`, `can_rx.h`
-3. Refresca el proyecto (F5).
+### 3. Importar `led_blinky` desde el SDK
 
-> **Tip Windows:** si prefieres no duplicar archivos, en MCUXpresso IDE: clic derecho en `source/` → *New* → *File* → *Advanced >> Link to file in the file system* y apunta a cada archivo del repo.
+Quickstart Panel → **"Import SDK example(s)…"** → board `frdmmcxa156` → `driver_examples/led_blinky` (o `led_blinky_peripheral`) → *Finish*.
 
-### 5. Verificar que la build agrega los drivers necesarios
+### 4. Reemplazar `source/` con los archivos del repo
 
-`led_blinky` ya trae `fsl_gpio`, `fsl_port`, `fsl_clock`, `fsl_reset` y `fsl_common`. Adicionalmente este firmware necesita:
+En MCUXpresso IDE: borrar `source/led_blinky.c` (clic derecho → Delete) y copiar al `source/` del proyecto IDE TODOS los archivos `.c/.h` de la carpeta `source/` del repo clonado:
 
-- **`fsl_lpuart`** (para `uart_dbg`)
-- **`fsl_flexcan`** (para `can_rx`)
+```powershell
+Copy-Item -Path "C:\Users\<usuario>\Desktop\brazo\source\*" `
+          -Destination "<workspace>\<proyecto_IDE>\source\" -Force
+```
 
-Para agregarlos al proyecto:
+(Reemplaza `<usuario>`, `<workspace>`, `<proyecto_IDE>` por tus rutas reales.) Después F5 en el IDE para refrescar.
 
-1. Clic derecho en el proyecto → *Manage SDK Components*.
-2. En la pestaña "Drivers", marca **lpuart** y **flexcan**.
-3. Aplica. El IDE copia `drivers/fsl_lpuart.{h,c}` y `drivers/fsl_flexcan.{h,c}` dentro del proyecto.
+### 5. Agregar driver `fsl_flexcan` al proyecto
 
-### 6. Compilar y flashear
+Clic derecho en el proyecto → **Manage SDK Components** → pestaña Drivers → marcar **flexcan** → OK. El IDE copia `fsl_flexcan.{h,c}` a `drivers/`.
 
-1. Clic en el martillo (Build). Debe compilar sin warnings.
-2. Conecta el MCU-Link de la tarjeta vía USB. Aparece como **MCU-LINK CMSIS-DAP** + puerto VCP.
-3. Clic en la flecha verde (Debug). MCUXpresso pregunta interfaz: elige **CMSIS-DAP**, target `MCXA156`. Acepta los defaults.
-4. La sesión de debug arranca y para en `main()`. Presiona "Resume" (F8).
+### 6. Build + Flash + Debug
 
-### 7. Abrir el log por UART
+Martillo verde → Bichito verde → seleccionar **MCU-LINK (CMSIS-DAP) Probe** → OK → F8 (Resume).
 
-- Identifica qué `COMx` quedó asignado al MCU-Link de la A156 (Administrador de Dispositivos → *Puertos COM y LPT* → "MCU-Link CMSIS-DAP Vcom Port").
-- Abre cualquier terminal serial (Tera Term, PuTTY, MCUXpresso Terminal View, Tabby, etc.) en **`COMx` @ 115200, 8N1, sin control de flujo**.
-- Deberías ver:
-  ```
-  =======================================
-   RX  FRDM-MCXA156  -  Protesis Robotica
-  =======================================
-  [INIT] modulos OK
-         FlexCAN0 @ 500 kbps, ID 0x200, DLC 8, RX MB0
-  ---------------------------------------
-  RX | (sin frame todavia)  rx[ok=    0 err=  0]
-  ```
-- Cuando enchufes y enciendas el TX (MCXN947) y haya cable CAN entre las dos tarjetas, las líneas pasan a:
-  ```
-  RX | S= 90  E= 75  W= 45  age=  47 ms  rx[ok=   23 err=  0]
-  ```
+### 7. Verificación por terminal serial
+
+Abre PuTTY u otro terminal serial en `COMx` (el del MCU-Link de la A156), **115200 8N1**. Debes ver:
+
+```
+=======================================
+ TX  FRDM-MCXA156  -  Protesis Robotica
+=======================================
+[INIT] modulos OK
+       FlexCAN0 @ 500 kbps, ID 0x200, DLC 8, periodo 50 ms
+       UI: SW2=+5  SW3=-5  SW3-long=ciclar articulacion
+---------------------------------------
+TX | S= 90  E= 75  W= 45  sel=Hombro  can[ok= 19 err=  0 drop=  0]
+```
+
+- Aprieta **SW2** y debe imprimir `[BTN] SW2 short -> +5 deg` y el campo `S` debe subir a 95.
+- Aprieta **SW3** corto y el campo `S` baja a 85.
+- Aprieta **SW3** largo (≥600 ms) y debe imprimir `[BTN] SW3 LONG -> sel=Codo`. Ahora SW2/SW3 modificarán `E`.
+- Si `can[err]` sube y `can[ok]` no, no hay receptor en el bus o el cable está mal.
 
 ---
 
@@ -137,11 +142,13 @@ Para agregarlos al proyecto:
 ```
 source/
 ├── main.c          Entry-point. BOARD_InitBoot* + appMain().
-├── app.{c,h}       Scheduler cooperativo. Polling de CAN + log + LEDs.
+├── app.{c,h}       Scheduler cooperativo. Botones + CAN tx + log.
 ├── tick.{c,h}      SysTick @ 1 ms. tick_get_ms() es el reloj del proyecto.
 ├── uart_dbg.{c,h}  LPUART0 init directa (sin DbgConsole/newlib). 115200 8N1.
 ├── gpio_io.{c,h}   LEDs RGB onboard. PORT3/GPIO3 + reset release.
-└── can_rx.{c,h}    FlexCAN0 receptor. ISR-driven, MB0, filtro ID exacto.
+├── buttons.{c,h}   SW2 (GPIO1.7) + SW3 (GPIO0.6) con debounce + long-press.
+├── joints.{c,h}    Estado de las 3 articulaciones + frame packing (C puro).
+└── can_tx.{c,h}    FlexCAN0 transmisor ISR-driven, MB1, ID 0x200, 500 kbps.
 ```
 
 Convenciones de código (estilo UAG):
@@ -154,23 +161,42 @@ Convenciones de código (estilo UAG):
 
 ---
 
-## Roadmap (qué falta)
+## Nodo receptor (FRDM-MCXN947)
 
-El firmware actual cubre solo el **Paso A** del receptor (CAN end-to-end + visibilidad mínima). Pendiente para sesiones siguientes:
+El receptor vive en **otro proyecto** (no en este repo). Hace lo opuesto:
 
-- **Paso B (PWM):** FLEXPWM0 SM0/SM1/SM2 canal A en P3_6/P3_8/P3_10. Mapeo ángulo → duty 5–10 % (servo) o 10–100 % (LED de demostración).
-- **Paso C (watchdog SW):** si pasan más de 200 ms sin frame válido → entra a "modo seguro", LED rojo intermitente, PWM en estado neutro.
-- **Paso D (uart_csv):** salida CSV `S,E,W\r\n` cada 50 ms por la misma LPUART0 hacia el viewer 3D de PC (`pc_viewer/viewer.py`).
+1. Recibe el frame `0x200` del bus CAN (FlexCAN0 RX en P1_10/P1_11 ALT11).
+2. Decodifica `(S, E, W)` de los 8 bytes.
+3. Emite `"%u,%u,%u\r\n"` por **LPUART4** (USB-VCP del MCU-Link de la N947) a 115200 8N1, cada 50 ms.
+
+El viewer 3D `pc_viewer/viewer.py` (PyVista) abre el COM virtual de la N947, parsea las líneas CSV, y anima un brazo antropomórfico en pantalla.
+
+```powershell
+# En la PC donde está el USB del MCU-Link de la N947:
+cd pc_viewer
+.\run.ps1            # autodetecta el COM
+# o bien
+.\run.ps1 --port COM7
+```
+
+---
+
+## Roadmap
+
+- [x] **Paso A:** Bring-up CAN (RX en 156). Validado en hardware.
+- [x] **Inversión de roles:** 156 pasa a TX, 947 pasa a RX + CSV al viewer.
+- [ ] **Paso C:** Watchdog SW (200 ms sin frame → modo seguro, LED rojo intermitente).
+- [ ] **Paso PWM:** opcional — agregar FLEXPWM al RX para mover servos físicos o LEDs externos.
 
 ---
 
 ## Troubleshooting
 
-| Síntoma                                          | Causa probable                                                    |
-| :----------------------------------------------- | :---------------------------------------------------------------- |
-| LED azul no parpadea                             | El firmware no llegó a `appMain()`. Revisar consola del debugger. |
-| Log se ve "encriptado" / símbolos raros          | Baudrate del terminal ≠ 115200. Ajustar a 115200 8N1.             |
-| `rx[ok=0 err=0]` indefinidamente                 | El TX no está corriendo, o el cable CAN está abierto.             |
-| `rx[ok=0 err=N]` con N subiendo                  | Hay tráfico pero el ID no coincide, o baudrate del TX ≠ 500 kbps. |
-| `rx[ok=0 err=N]` enorme aún con TX corriendo     | Posible inversión CANH/CANL en el cable, o falta GND común.        |
-| `age` siempre crece y nunca decrece              | El callback no se está disparando — revisar NVIC, hardware bus.   |
+| Síntoma                                              | Causa probable                                                    |
+| :--------------------------------------------------- | :---------------------------------------------------------------- |
+| LED azul no parpadea                                 | El firmware no llegó a `appMain()`. Revisar consola del debugger. |
+| Log se ve "encriptado" / símbolos raros              | Baudrate del terminal ≠ 115200. Ajustar a 115200 8N1.             |
+| `can[err]` sube y `can[ok]=0`                        | No hay receptor en el bus (faltan ACKs) o cable mal conectado.    |
+| Botón no responde                                    | Mal contacto o `buttons_init()` no se llamó. Reset y reintentar.  |
+| `can[ok]` sube pero el viewer no se mueve            | Revisar el receptor (947) y el COM al que apunta el viewer.       |
+| `can[drop]` sube                                     | El TX previo no terminó (callback no llegó). Bus muy ocupado o ACK error. |

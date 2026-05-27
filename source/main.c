@@ -1,5 +1,5 @@
 /*
- * main.c - Punto de entrada del firmware del nodo RX (FRDM-MCXA156).
+ * main.c - Punto de entrada del firmware del nodo TX (FRDM-MCXA156).
  *
  * Proyecto 2 NXP-UAG: Red CAN para Coordinacion de Protesis Robotica Modular.
  *
@@ -30,8 +30,8 @@ int main(void)
     /* Inicializacion mandatoria generada por MCUXpresso Config Tools.
      * BOARD_InitBootPins: configura los pines definidos en pin_mux.c.
      * En el led_blinky base solo configura el LED rojo; los pines de
-     * LPUART0, CAN0 y los otros LEDs los configuran los modulos
-     * respectivos (uart_dbg, can_rx, gpio_io) en su propia init. */
+     * LPUART0, CAN0, botones y otros LEDs los configuran los modulos
+     * respectivos (uart_dbg, can_tx, buttons, gpio_io) en su propia init. */
     BOARD_InitBootPins();
 
     /* BOARD_InitBootClocks: arranca el arbol de clocks del MCU.
